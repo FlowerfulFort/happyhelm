@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/flowerfulfort/happyhelm/internal/helm"
 	"github.com/flowerfulfort/happyhelm/internal/tui"
@@ -43,13 +44,13 @@ var releaseCmd = &cobra.Command{
 func init() {
 	addPickFlags(pickCmd)
 	addPickFlags(releaseCmd)
-	releaseCmd.Flags().StringVarP(&pickOpts.namespace, "namespace", "n", "", "release namespace")
 	rootCmd.AddCommand(pickCmd)
 	rootCmd.AddCommand(releaseCmd)
 }
 
 func addPickFlags(command *cobra.Command) {
 	command.Flags().StringVarP(&pickOpts.output, "output", "o", "", "write selected YAML to a file")
+	command.Flags().StringVarP(&pickOpts.namespace, "namespace", "n", "", "release namespace")
 	command.Flags().BoolVar(&pickOpts.noTUI, "no-tui", false, "skip TUI and output all matched paths")
 	command.Flags().BoolVar(&pickOpts.debug, "debug", false, "print debug information to stderr")
 }
@@ -57,14 +58,24 @@ func addPickFlags(command *cobra.Command) {
 func runPick(chart string, keywords []string, opts pickOptions) error {
 	raw, err := helm.ShowValues(chart)
 	if err != nil {
-		return err
+		if shouldTryReleaseFallback(err, opts) {
+			release := inferredReleaseName(chart)
+			debugf(opts.debug, "helm show values failed, trying deployed release %q in namespace %q\n", release, effectiveNamespace(opts))
+			raw, err = helm.GetReleaseValues(release, effectiveNamespace(opts))
+			if err != nil {
+				return err
+			}
+			debugf(opts.debug, "fetched %d bytes from helm get values --all\n", len(raw))
+			return runPickFromYAML(raw, keywords, opts)
+		}
+		return withChartModeHint(err, chart, opts)
 	}
 	debugf(opts.debug, "fetched %d bytes from helm show values\n", len(raw))
 	return runPickFromYAML(raw, keywords, opts)
 }
 
 func runPickRelease(release string, keywords []string, opts pickOptions) error {
-	raw, err := helm.GetReleaseValues(release, opts.namespace)
+	raw, err := helm.GetReleaseValues(release, effectiveNamespace(opts))
 	if err != nil {
 		return err
 	}
@@ -125,4 +136,35 @@ func debugf(enabled bool, format string, args ...any) {
 	if enabled {
 		fmt.Fprintf(os.Stderr, "debug: "+format, args...)
 	}
+}
+
+func effectiveNamespace(opts pickOptions) string {
+	if opts.namespace != "" {
+		return opts.namespace
+	}
+	return os.Getenv("HELM_NAMESPACE")
+}
+
+func shouldTryReleaseFallback(err error, opts pickOptions) bool {
+	return effectiveNamespace(opts) != "" && strings.Contains(strings.ToLower(err.Error()), "repo") && strings.Contains(strings.ToLower(err.Error()), "not found")
+}
+
+func withChartModeHint(err error, chart string, opts pickOptions) error {
+	if strings.Contains(strings.ToLower(err.Error()), "repo") && strings.Contains(strings.ToLower(err.Error()), "not found") {
+		release := inferredReleaseName(chart)
+		ns := effectiveNamespace(opts)
+		if ns == "" {
+			return fmt.Errorf("%w\n\nFor deployed release values, use: helm pick release %s -n <namespace> [keyword...]\nFor chart defaults, add the chart repo first with: helm repo add <repo> <url>", err, release)
+		}
+		return fmt.Errorf("%w\n\nFor deployed release values, use: helm pick release %s -n %s [keyword...]", err, release, ns)
+	}
+	return err
+}
+
+func inferredReleaseName(chart string) string {
+	parts := strings.Split(strings.Trim(chart, "/"), "/")
+	if len(parts) == 0 || parts[len(parts)-1] == "" {
+		return chart
+	}
+	return parts[len(parts)-1]
 }

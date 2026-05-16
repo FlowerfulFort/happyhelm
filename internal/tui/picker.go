@@ -82,6 +82,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.entries)-1 {
 				m.cursor++
 			}
+		case "pgup", "ctrl+u":
+			m.movePage(-1)
+		case "pgdown", "ctrl+d":
+			m.movePage(1)
 		case " ", "space":
 			if len(m.entries) > 0 {
 				m.selected[m.cursor] = !m.selected[m.cursor]
@@ -115,7 +119,7 @@ func (m model) View() string {
 	if start > 0 || end < len(m.entries) {
 		fmt.Fprintf(&b, "\nshowing %d-%d of %d\n", start+1, end, len(m.entries))
 	}
-	b.WriteString("\nup/down or j/k: move    space: toggle    a: all    enter: confirm    q/esc: quit\n")
+	b.WriteString("\nup/down or j/k: move    pgup/pgdown or ctrl+u/d: page    space: toggle    a: all    enter: confirm    q/esc: quit\n")
 	return b.String()
 }
 
@@ -134,6 +138,25 @@ func (m *model) toggleAll() {
 	}
 	for i := range m.entries {
 		m.selected[i] = true
+	}
+}
+
+func (m *model) movePage(direction int) {
+	if len(m.entries) == 0 {
+		return
+	}
+
+	delta := m.pageSize()
+	if delta < 1 {
+		delta = 1
+	}
+
+	m.cursor += direction * delta
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor >= len(m.entries) {
+		m.cursor = len(m.entries) - 1
 	}
 }
 

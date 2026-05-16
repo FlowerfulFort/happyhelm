@@ -28,7 +28,10 @@ helm pick traefik/traefik service.type
 helm pick traefik/traefik nodePort externalTrafficPolicy
 helm pick traefik/traefik service.type -o values/traefik.yaml
 helm pick release traefik nodePort -n kube-system
+helm pick traefik/traefik nodePort -n traefik
 ```
+
+When `-n` is set and chart default lookup fails because the local chart repo is not configured, `helm pick <repo>/<chart> ... -n <namespace>` falls back to deployed release values using the chart name as the release name. For example, `helm pick traefik/traefik nodePort -n traefik` tries `helm get values traefik --all -n traefik`.
 
 Use `--no-tui` to output all matched paths without opening the picker:
 
@@ -40,6 +43,7 @@ helm pick release traefik nodePort -n kube-system --no-tui
 ## Picker Keys
 
 - Up/Down or `j`/`k`: move
+- PageUp/PageDown or `Ctrl+u`/`Ctrl+d`: page
 - Space: toggle current item
 - `a`: select all / deselect all
 - Enter: confirm
