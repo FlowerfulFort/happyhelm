@@ -1,0 +1,21 @@
+# Build outputs
+happyhelm
+*.exe
+*.test
+
+# Go test and coverage
+coverage.out
+*.coverprofile
+
+# Local caches and temp files
+.cache/
+tmp/
+*.tmp
+
+# Local generated values files
+/values/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/

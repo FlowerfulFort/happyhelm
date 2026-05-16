@@ -1,0 +1,5 @@
+name: "pick"
+version: "0.1.0"
+usage: "Pick Helm values and generate minimal override YAML"
+description: "Interactive Helm values picker for creating small override files"
+command: "$HELM_PLUGIN_DIR/happyhelm"
